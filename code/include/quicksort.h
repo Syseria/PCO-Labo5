@@ -9,6 +9,7 @@
 #include <pcosynchro/pcomutex.h>
 #include <pcosynchro/pcoconditionvariable.h>
 #include "multithreadedsort.h"
+#include "utils.h"
 
 /**
  * @brief The Quicksort class implements the multi-threaded Quicksort algorithm.
@@ -16,13 +17,14 @@
 template<typename T>
 class Quicksort: public MultithreadedSort<T> {
 public:
-    Quicksort(unsigned int nbThreads) : MultithreadedSort<T>(nbThreads) {}
+    Quicksort(unsigned int nbThreads) : MultithreadedSort<T>(nbThreads), arrayToSort(nullptr), done(false) {}
 
     /**
      * @brief sort Manages the threads to sort the given sequence.
      * @param array is the sequence to sort
      */
     void sort(std::vector<T>& array) override {
+        this->arrayToSort = &array;
         std::vector<std::unique_ptr<PcoThread>> threads;
 
         mutex.lock();
@@ -30,7 +32,6 @@ public:
             threads.emplace_back(std::make_unique<PcoThread>(&Quicksort::worker, this));
         }
 
-        ++activeThread;
         tasks.emplace([this, &array]() {
             quicksort(array.begin(), array.end());
             finishTask();
@@ -46,22 +47,25 @@ public:
 private:
 
     void worker() {
-        while (true) {
+        while (!done) {
             std::function<void()> task;
 
             mutex.lock();
-            cond.wait(&mutex);
-
-            if (tasks.empty() && activeThread == 0) {
-                break;
+            while (!signaler()) {
+                cond.wait(&mutex);
             }
 
-            task = tasks.front();
-            tasks.pop();
+            if (!tasks.empty()) {
+                ++activeThread;
+                task = tasks.front();
+                tasks.pop();
+            }
 
             mutex.unlock();
 
-            task();
+            if (task) {
+                task();
+            }
         }
     }
 
@@ -77,26 +81,49 @@ private:
 
             mutex.lock();
 
+            // Left part
             if (activeThread < this->nbThreads) {
-                ++activeThread;
                 tasks.emplace([this, lo, pivot]() {
                     quicksort(lo, pivot);
                     finishTask();
                 });
                 cond.notifyOne();
             } else {
-                quicksort(lo,pivot);
+                mutex.unlock();
+                quicksort(lo, pivot);
             }
 
-            quicksort(std::next(pivot), hi);
+            // Right part
+            if (activeThread < this->nbThreads) {
+                tasks.emplace([this, pivot, hi]() {
+                    quicksort(std::next(pivot), hi);
+                    finishTask();
+                });
+                cond.notifyOne();
+            } else {
+                mutex.unlock();
+                quicksort(std::next(pivot), hi);
+            }
+
+            mutex.unlock();
         }
     }
 
+    bool signaler() {
+        return !tasks.empty() || (activeThread == 0 && done);
+    }
+
     void finishTask() {
-        mutexFinished.lock();
+        mutex.lock();
         --activeThread;
-        cond.notifyAll();
-        mutexFinished.unlock();
+
+        if (std::is_sorted(arrayToSort->begin(), arrayToSort->end())) {
+            done = true;
+            cond.notifyAll();
+        } else {
+            cond.notifyOne();
+        }
+        mutex.unlock();
     }
 
     /**
@@ -106,6 +133,7 @@ private:
      * @return          a vector::iterator to the pivot
      */
     typename std::vector<T>::iterator partition (typename std::vector<T>::iterator lo, typename std::vector<T>::iterator hi) {
+        mutex.lock();
         typename std::vector<T>::iterator pivot = std::prev(hi);
 
         typename std::vector<T>::iterator i = lo;
@@ -117,15 +145,16 @@ private:
         }
         std::iter_swap(i, pivot);
 
+        mutex.unlock();
         return i;
     }
 
-    PcoMutex mutex, mutexFinished;
+    PcoMutex mutex;
     PcoConditionVariable cond;
-    int activeThread = 0;
+    int activeThread = 1;
     std::queue<std::function<void()>> tasks;
-    bool pivotFound, partitionDone;
-    //unsigned int nbThreads;
+    bool done;
+    std::vector<T>* arrayToSort;
 };
 
 

@@ -3,6 +3,23 @@
 
 #include <vector>
 #include <random>
+#include <iostream>
+
+template<typename T>
+void display(std::vector<T>& vec) {
+    for (auto e : vec) {
+        std::cout << e << " ";
+    }
+    std::cout << std::endl;
+}
+
+template<typename T>
+void display(std::vector<T>* vec) {
+    for (auto e : *vec) {
+        std::cout << e << " ";
+    }
+    std::cout << std::endl;
+}
 
 /**
  * @brief Vérifie si un vecteur est trié dans l'ordre ascendant
