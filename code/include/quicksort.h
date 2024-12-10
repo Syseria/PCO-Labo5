@@ -17,7 +17,11 @@
 template<typename T>
 class Quicksort: public MultithreadedSort<T> {
 public:
-    Quicksort(unsigned int nbThreads) : MultithreadedSort<T>(nbThreads), arrayToSort(nullptr), done(false) {}
+    Quicksort(unsigned int nbThreads) : MultithreadedSort<T>(nbThreads), arrayToSort(nullptr), done(false) {
+        for (size_t i = 0; i < this->nbThreads; ++i) {
+            threads.emplace_back(std::make_unique<PcoThread>(&Quicksort::worker, this));
+        }
+    }
 
     /**
      * @brief sort Manages the threads to sort the given sequence.
@@ -25,13 +29,8 @@ public:
      */
     void sort(std::vector<T>& array) override {
         this->arrayToSort = &array;
-        std::vector<std::unique_ptr<PcoThread>> threads;
 
         mutex.lock();
-        for (size_t i = 0; i < this->nbThreads; ++i) {
-            threads.emplace_back(std::make_unique<PcoThread>(&Quicksort::worker, this));
-        }
-
         tasks.emplace([this, &array]() {
             quicksort(array.begin(), array.end());
             finishTask();
@@ -154,6 +153,7 @@ private:
     int activeThread = 1;
     std::queue<std::function<void()>> tasks;
     bool done;
+    std::vector<std::unique_ptr<PcoThread>> threads;
     std::vector<T>* arrayToSort;
 };
 
