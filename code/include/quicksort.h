@@ -150,7 +150,7 @@ private:
 
     PcoMutex mutex;
     PcoConditionVariable cond;
-    int activeThread = 1;
+    int activeThread = 0;
     std::queue<std::function<void()>> tasks;
     bool done;
     std::vector<std::unique_ptr<PcoThread>> threads;
