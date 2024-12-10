@@ -77,9 +77,8 @@ private:
      */
     void quicksort (typename std::vector<T>::iterator lo, typename std::vector<T>::iterator hi) {
         if (lo != hi && std::distance(lo, hi) > 1) {
-            typename std::vector<T>::iterator pivot = partition(lo, hi);
-
             mutex.lock();
+            typename std::vector<T>::iterator pivot = partition(lo, hi);
 
             // Left part
             if (activeThread < this->nbThreads) {
@@ -90,7 +89,9 @@ private:
                 cond.notifyOne();
             } else {
                 mutex.unlock();
+                // Necessary to ensure the task is run by at least 1 thread, avoiding all threads to await on a task that will never be ran
                 quicksort(lo, pivot);
+                mutex.lock();
             }
 
             // Right part
@@ -103,6 +104,7 @@ private:
             } else {
                 mutex.unlock();
                 quicksort(std::next(pivot), hi);
+                mutex.lock();
             }
 
             mutex.unlock();
@@ -133,7 +135,6 @@ private:
      * @return          a vector::iterator to the pivot
      */
     typename std::vector<T>::iterator partition (typename std::vector<T>::iterator lo, typename std::vector<T>::iterator hi) {
-        mutex.lock();
         typename std::vector<T>::iterator pivot = std::prev(hi);
 
         typename std::vector<T>::iterator i = lo;
@@ -145,7 +146,6 @@ private:
         }
         std::iter_swap(i, pivot);
 
-        mutex.unlock();
         return i;
     }
 
