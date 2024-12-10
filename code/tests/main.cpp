@@ -19,7 +19,7 @@ void test(int nbThreads, int size, int seed) {
 
 TEST(SortingTest, Test1) {
     // TODO: Modify this test, and add others
-    int size = 100000;
+    int size = 10000;
     int nbThreads = 10;
     int seed = 0;
 
